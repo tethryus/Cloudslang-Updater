@@ -1,5 +1,3 @@
-Set-ExecutionPolicy Unrestricted
-
 #First run only. Creating necessary files and folders if needed.
 $baseDir = "$env:USERPROFILE\cloudslang"
 
@@ -7,14 +5,14 @@ If (!(Test-Path $baseDir)) {
    New-Item -Path $baseDir -ItemType Directory
 }
 else {
-   Write-Host "Your base directory $baseDir already exists!"
+   Write-Host "Your base directory $baseDir already exists! - ignore message"
 }
 
 If (!(Test-Path $baseDir\version)) {
    New-Item -Path $baseDir -ItemType File
 }
 else {
-   Write-Host "Your version file already exists!"
+   Write-Host "Your version file already exists! - ignore message"
 }
 
 sleep 5
@@ -22,15 +20,12 @@ sleep 5
 $releaseParams = @{
     Uri = "https://api.github.com/repos/CloudSlang/cloud-slang/releases";
     Method = 'GET';
-    Headers = @{Accept = 'application/json'};
     ContentType = 'application/json';
-    Body = (ConvertTo-Json $releaseData -Compress)
-}
+                  }
 
 $result = Invoke-RestMethod @releaseParams
 
 $tag = $result.tag_name[0]
-
 $destDir = "$env:USERPROFILE\cloudslang\$tag"
 
 If (!(Test-Path $destDir)) {
@@ -70,11 +65,71 @@ $releaseAssetParams = @{
 					   }
 
 Invoke-RestMethod @releaseAssetParams -OutFile $ZipFile
+
+add-type -type  @'
+using System;
+using System.Runtime.InteropServices;
+using System.ComponentModel;
+using System.IO;
+
+namespace Win32Functions
+{
+  public class ExtendedFileInfo
+  {    
+    public static long GetFileSizeOnDisk(string file)
+    {
+        FileInfo info = new FileInfo(file);
+        uint dummy, sectorsPerCluster, bytesPerSector;
+        int result = GetDiskFreeSpaceW(info.Directory.Root.FullName, out sectorsPerCluster, out bytesPerSector, out dummy, out dummy);
+        if (result == 0) throw new Win32Exception();
+        uint clusterSize = sectorsPerCluster * bytesPerSector;
+        uint hosize;
+        uint losize = GetCompressedFileSizeW(file, out hosize);
+        long size;
+        size = (long)hosize << 32 | losize;
+        return ((size + clusterSize - 1) / clusterSize) * clusterSize;
+    }
+
+    [DllImport("kernel32.dll")]
+    static extern uint GetCompressedFileSizeW([In, MarshalAs(UnmanagedType.LPWStr)] string lpFileName,
+       [Out, MarshalAs(UnmanagedType.U4)] out uint lpFileSizeHigh);
+
+    [DllImport("kernel32.dll", SetLastError = true, PreserveSig = true)]
+    static extern int GetDiskFreeSpaceW([In, MarshalAs(UnmanagedType.LPWStr)] string lpRootPathName,
+       out uint lpSectorsPerCluster, out uint lpBytesPerSector, out uint lpNumberOfFreeClusters,
+       out uint lpTotalNumberOfClusters);  
+  }
+}
+'@
+
+$size = $result.assets[$num].size
+$downFile = [Win32Functions.ExtendedFileInfo]::GetFileSizeOnDisk( '$destDir\$ZipFile' )
+
+If (!($downFile -Match $size)) {
+   Write-Host "$ZipFile - file integrity check PASSED!"
+}
+else {
+  Write-Host "$ZipFile - file size mismatch, retrying download"
+  sleep 2
+  Invoke-RestMethod @releaseAssetParams -OutFile $ZipFile
+}
+
 					}
  sleep 5
  mainmenu 
 						}
-						
+				
+ function updateShortcuts{
+ $WshShell = New-Object -ComObject WScript.Shell
+ $Shortcut = $WshShell.CreateShortcut("$env:USERPROFILE\Desktop\Cslang CLI.lnk")
+ $Shortcut.TargetPath = "$destDir\cslang-cli\cslang\bin\cslang.bat"
+ $Shortcut.WorkingDirectory ="$destDir\cslang-cli\cslang\bin\"
+ $Shortcut.Save()
+ Write-Host "Shortcuts have been updated"
+  sleep 5
+  mainmenu		
+                         } 
+						 
 #Areyousure function. Alows user to select y or n when asked to exit. Y exits and N returns to main menu.  
  function areyousure {$areyousure = read-host "Are you sure you want to exit? (y/n)"  
            if ($areyousure -eq "y"){exit}  
@@ -92,8 +147,9 @@ Invoke-RestMethod @releaseAssetParams -OutFile $ZipFile
  echo ""  
  echo "    1. Check for Update"  
  echo "    2. Backup existing CS version - will implement later?"  
- echo "    3. Update CS version"  
- echo "    4. Exit"  
+ echo "    3. Update CS version" 
+ echo "    4  Update Shortcuts" 
+ echo "    5. Exit"  
  echo ""  
  echo ""
  echo "     WARNING: If you choose to update and have any"
@@ -104,7 +160,8 @@ Invoke-RestMethod @releaseAssetParams -OutFile $ZipFile
  if ($answer -eq 1){checkRelease}  
  if ($answer -eq 2){calc}  
  if ($answer -eq 3){cslangUpdate}  
- if ($answer -eq 4){areyousure}  
+ if ($answer -eq 4){updateShortcuts}  
+ if ($answer -eq 5){areyousure}
  else {write-host -ForegroundColor red "Invalid Selection"  
        sleep 5  
        mainmenu  
