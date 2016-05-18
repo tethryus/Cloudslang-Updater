@@ -20,8 +20,9 @@ sleep 5
 $releaseParams = @{
     Uri = "https://api.github.com/repos/CloudSlang/cloud-slang/releases";
     Method = 'GET';
+    Headers = @{Accept = 'application/json'};
     ContentType = 'application/json';
-                  }
+                      }
 
 $result = Invoke-RestMethod @releaseParams
 
@@ -112,9 +113,22 @@ else {
   Write-Host "$ZipFile - file size mismatch, retrying download"
   sleep 2
   Invoke-RestMethod @releaseAssetParams -OutFile $ZipFile
-}
+
+     }
 
 					}
+function Expand-ZIPFile($file, $destination)
+{
+$shell = new-object -com shell.application
+$zip = $shell.NameSpace($file)
+foreach($item in $zip.items())
+{
+$shell.Namespace($destination).copyhere($item)
+}
+}
+Write-Host "Unpacking files"  
+Expand-ZIPFile –File "$destDir\cslang-builder.zip" –Destination "$destDir\cslang-builder"
+Expand-ZIPFile –File "$destDir\cslang-cli.zip" –Destination "$destDir\cslang-cli"
  sleep 5
  mainmenu 
 						}
