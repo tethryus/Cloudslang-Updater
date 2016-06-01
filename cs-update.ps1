@@ -9,13 +9,14 @@ else {
 }
 
 If (!(Test-Path $baseDir\version)) {
-   New-Item -Path $baseDir -ItemType File
+   New-Item -Path $baseDir\version -ItemType File
+   "Available versions:" | Out-File -Encoding Ascii $baseDir\version
 }
 else {
    Write-Host "Your version file already exists! - ignore message"
 }
 
-sleep 5
+sleep 2
 
 $releaseParams = @{
     Uri = "https://api.github.com/repos/CloudSlang/cloud-slang/releases";
@@ -39,7 +40,7 @@ Push-Location $destDir
 
 #CheckCSrelease function. Checks whether you have the latest Release agains a version file.
 function checkRelease {
-$version =  Get-Content "$baseDir\version"
+$version = Get-Content "$baseDir\version"
 foreach ($ver in $version){
 If ($version -Match $tag) {
 	Write-Host "Release $tag already exists"}
